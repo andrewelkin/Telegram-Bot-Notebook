@@ -1,0 +1,38 @@
+/hello	
+/start       - show welcome message, also perform /restore
+-------------------------------------------------------------
+/f [+<must be> ..] [-<must not be>..] <finds> [<finds2>..]
+/find 	    - search substring [<finds>] 
+
+/tags       - show tags
+/tag <tag>  - find tag (faster than /f #<tag>)
+-------------------------------------------------------------
+/re
+/refresh     - re-read all messages from disk
+-------------------------------------------------------------
+/<msg no>    - show message by number
+
+/d <msg no>	
+/del         - delete message by message number 
+
+/docs [<finds>] 
+	     - show list of documents matching <finds>
+
+/pics [<img no>]
+            - show list of image files starting from image <img no>
+
+
+/pic <img no>
+             - show image by image number
+/delpic <img no>
+	     - delete image by image number
+
+/set <key>=<value> [<k2=v2>..]
+             - set session level variable
+/restore     - delete all session level user settings
+/settings    - show user settings
+
+
+
+/help 	    - this screen
+
