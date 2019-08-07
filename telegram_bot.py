@@ -10,12 +10,10 @@ import codecs
 import re
 import string
 
-messages_path = "x:/Google Drive/ettore_bot/"
-pic_path = messages_path + "images/"
-doc_path = messages_path + "documents/"
+messages_path = "./"
 
 '''
- File "secret.txt" contains a single line with secret code you received from the telegram bot father
+ File "secret.txt" contains a single line with secret code (access token) you received from the telegram bot father
  File "users.txt" has this format for each line:
  
  
@@ -29,8 +27,8 @@ doc_path = messages_path + "documents/"
 '''
 
 
-secret = open(messages_path+"secret.txt").read()
-updater = Updater(secret)
+
+
 
 
 messages=[]
@@ -757,9 +755,21 @@ def showhelp(bot,update,args):
     bot.send_message(chat_id=update.message.chat_id,text= t)
 
 
-
-
 if __name__ == '__main__':
+
+    for a in sys.argv[1:]:
+        messages_path = a
+
+    print ("Bot Folder: ",messages_path)
+
+    pic_path = messages_path + "images/"
+    doc_path = messages_path + "documents/"
+
+    secret = open(messages_path + "secret.txt").read()
+    secret = secret.replace("\n","")
+
+
+    updater = Updater(secret)
 
     if not os.path.exists(messages_path): os.mkdir(messages_path)
     if not os.path.exists(pic_path):  os.mkdir(pic_path)
