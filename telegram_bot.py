@@ -901,7 +901,7 @@ if __name__ == "__main__":
     updater.dispatcher.add_handler(CommandHandler("tag", find_tag, pass_args=True))
 
     updater.dispatcher.add_handler(CommandHandler("help", showhelp, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("?", techhelp, pass_args=True))
+    #updater.dispatcher.add_handler(CommandHandler("?", techhelp, pass_args=True))
 
     unknown_handler = MessageHandler(Filters.command, unknown_cmd)
     updater.dispatcher.add_handler(unknown_handler)
