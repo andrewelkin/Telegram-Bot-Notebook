@@ -4,7 +4,6 @@ from telegram import ParseMode, ChatAction
 import unicodedata
 from functools import wraps
 
-
 import time
 import codecs
 import re
@@ -25,7 +24,6 @@ messages_path = "./"
  only admins can delete messages and upload new ones. all plain users just search/view messages
  
 """
-
 
 messages = []
 new_messages = []
@@ -116,7 +114,7 @@ def build_pic_dir():
         if m.startswith("/p#i#c"):
             m = m[7:]
             fname = m.split(" ")[0]
-            m = m[len(fname) + 1 :]
+            m = m[len(fname) + 1:]
             picdir[fname] = m
 
     pic_files = [s for s in os.listdir(pic_path) if s.lower().endswith(".jpg")]
@@ -201,19 +199,14 @@ def save_messages():
             f.write("\n")
     f.close()
 
-
 def send_action(action):
     """Sends `action` while processing func command."""
-
     def decorator(func):
         @wraps(func)
         def command_func(*args, **kwargs):
-            if len(args) == 2:
-                bot, update = args
-                a = kwargs["args"]
-            else:
-                bot, update, dummy = args
-                a = dummy
+            update = args[0]
+            bot = args[1].bot
+            a = args[1].args
 
             bot.send_chat_action(chat_id=update.message.chat_id, action=action)
             func(bot, update, a)
@@ -221,6 +214,7 @@ def send_action(action):
         return command_func
 
     return decorator
+
 
 
 def hello(bot, update):
@@ -233,7 +227,6 @@ def hello(bot, update):
 
 
 def send_message(bot, update, mess_no, full=False):
-
     if len(messages) < mess_no:
         bot.send_message(
             chat_id=update.message.chat_id,
@@ -267,7 +260,7 @@ def send_message(bot, update, mess_no, full=False):
     elif m1.startswith("/p#i#c"):
         m1 = m1[7:]
         fname = m1.split(" ")[0].replace("\n", "")
-        m1 = m1[len(fname) + 1 :]
+        m1 = m1[len(fname) + 1:]
 
         if full:
 
@@ -310,7 +303,6 @@ def scan4docs(path):
 
 
 def all_docs(bot, update, args):
-
     res = scan4docs(doc_path)
     s = set()
     for m in messages:
@@ -481,7 +473,6 @@ def del_message(bot, update, args):
 
 
 def unknown_cmd(bot, update):
-
     txt = update.message["text"]
     if txt is not None and len(txt) > 1:
         txt = txt[1:]
@@ -701,7 +692,6 @@ def pics_dir(bot, update, args):
 
 ##@send_action(ChatAction.TYPING)
 def just_message(bot, update):
-
     txt = update.message["text"]
     if txt is not None:
         if txt.startswith("#"):
@@ -901,7 +891,7 @@ if __name__ == "__main__":
     updater.dispatcher.add_handler(CommandHandler("tag", find_tag, pass_args=True))
 
     updater.dispatcher.add_handler(CommandHandler("help", showhelp, pass_args=True))
-    #updater.dispatcher.add_handler(CommandHandler("?", techhelp, pass_args=True))
+    # updater.dispatcher.add_handler(CommandHandler("?", techhelp, pass_args=True))
 
     unknown_handler = MessageHandler(Filters.command, unknown_cmd)
     updater.dispatcher.add_handler(unknown_handler)
@@ -911,7 +901,6 @@ if __name__ == "__main__":
 
     updater.start_polling()
     updater.idle()
-
 
 """
 {'delete_chat_photo': False, '
