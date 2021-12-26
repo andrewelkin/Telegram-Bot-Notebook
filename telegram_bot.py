@@ -1,14 +1,10 @@
 import os, sys, shutil
-
-from telegram import ParseMode, ChatAction
+from telegram import ChatAction
 import json
 from telegram.ext import Updater, CommandHandler, Filters, MessageHandler, CallbackContext
 from telegram import ParseMode
-from telegram import ReplyKeyboardMarkup, Update, ReplyKeyboardRemove
-
-import unicodedata
+from telegram import Update
 from functools import wraps
-
 import time
 import codecs
 import re
@@ -46,7 +42,7 @@ messages = []
 new_messages = []
 admins = {}
 users = {}
-picdir = {}
+pic_dir = {}
 pic_files = []
 all_tags = {}
 
@@ -56,17 +52,17 @@ user_settings = {}
 user_session_settings = {}
 
 
-def read_config(fname):
+def read_config(file_name):
     try:
-        cfg = json.load(open(fname))
+        c = json.load(open(file_name))
     except Exception as e:
         print("Error reading config", e)
         return None
 
-    return cfg
+    return c
 
 
-def read_users(cfg):
+def read_users():
     global users, admins
     users = {}
     admins = {}
@@ -151,16 +147,16 @@ def xis_admin_ok(update: Update, context: CallbackContext):
 
 
 def build_pic_dir():
-    global picdir, pic_files
+    global pic_dir, pic_files
 
     pic_files = []
-    picdir = {}
+    pic_dir = {}
     for m in messages:
         if m.startswith("/p#i#c"):
             m = m[7:]
-            fname = m.split(" ")[0]
-            m = m[len(fname) + 1:]
-            picdir[fname] = m
+            file_name = m.split(" ")[0]
+            m = m[len(file_name) + 1:]
+            pic_dir[file_name] = m
 
     pic_files = [s for s in os.listdir(pic_path) if s.lower().endswith(".jpg")]
 
@@ -168,11 +164,11 @@ def build_pic_dir():
 def update_tags(m):
     # wordList = re.sub("[^#a-zA-Z0-9_]", " ", curr_message).split()
     sp = string.punctuation.replace("#", "")
-    wordList = re.sub("[" + sp + "]", "", m).split()
-    for w in wordList:
+    word_list = re.sub("[" + sp + "]", "", m).split()
+    for w in word_list:
         if w.startswith("#") and len(w) > 1:
-            l = all_tags.setdefault(w, set())
-            l.add(len(messages) - 1)
+            l_tags = all_tags.setdefault(w, set())
+            l_tags.add(len(messages) - 1)
 
 
 def rebuild_tags():
@@ -187,16 +183,16 @@ def rebuild_tags():
 
 def read_messages():
     global messages
-    msgname = messages_path + "notes.txt"
-    if not os.path.exists(msgname):
+    msg_name = messages_path + "notes.txt"
+    if not os.path.exists(msg_name):
         return []
-    # f = file(msgname)
-    f = codecs.open(msgname, "r", "cp1251")
-    alls = f.read()
+    # f = file(msg_name)
+    f = codecs.open(msg_name, "r", "cp1251")
+    all_s = f.read()
 
     messages = []
     curr_message = ""
-    for s in alls.split("\n"):
+    for s in all_s.split("\n"):
         s += "\n"
         if s.startswith("---"):
             if len(curr_message) == 0:
@@ -222,21 +218,10 @@ def update_messages():
     new_messages = []
 
 
-def save_messages1():
-    msgname = messages_path + "notes.txt"
-    f = open(msgname, "w")
-    for s in messages:
-        f.write("---\n")
-        f.write(s)
-        if not s.endswith("\n"):
-            f.write("\n")
-    f.close()
-
-
 def save_messages():
-    msgname = messages_path + "notes.txt"
-    # f = file(msgname,'w')
-    f = codecs.open(msgname, "w", "cp1251")
+    msg_name = messages_path + "notes.txt"
+    # f = file(msg_name,'w')
+    f = codecs.open(msg_name, "w", "cp1251")
     for s in messages:
         f.write("---\n")
         f.write(s)
@@ -252,10 +237,8 @@ def send_action(action):
         @wraps(func)
         def command_func(*args, **kwargs):
             bot = args[1].bot
-            a = args[1].args
-
             bot.send_chat_action(chat_id=args[0].message.chat_id, action=action)
-            func(args[0], args[1], a)
+            func(args[0], args[1], args[1].args)
 
         return command_func
 
@@ -268,14 +251,14 @@ def hello(bot, context: CallbackContext):
         + ", I have %d notes" % (len(messages) + len(new_messages))
     )
 
-    delusettings(bot, context, [])
+    del_u_settings(bot, context, [])
 
 
 def send_message(bot, context: CallbackContext, mess_no, full=False):
     if len(messages) < mess_no:
         context.bot.send_message(
             chat_id=bot.message.chat_id,
-            text="<i>(..could not find message %03d)</i> " % (mess_no),
+            text="<i>(..could not find message %03d)</i> " % mess_no,
             parse_mode=ParseMode.HTML,
         )
 
@@ -284,35 +267,35 @@ def send_message(bot, context: CallbackContext, mess_no, full=False):
         m1 = m1[7:]
 
         if m1.startswith('"'):
-            fname = m1[1:].split('"')[0].replace("\n", "")
+            file_name = m1[1:].split('"')[0].replace("\n", "")
         else:
-            fname = m1.split(" ")[0].replace("\n", "")
+            file_name = m1.split(" ")[0].replace("\n", "")
 
         if full:
             try:
-                fo = open(doc_path + fname, "rb")
+                fo = open(doc_path + file_name, "rb")
                 context.bot.send_document(chat_id=bot.message.chat_id, document=fo)
                 fo.close()
             except:
                 context.bot.send_message(
                     chat_id=bot.message.chat_id,
-                    text="[%03d] <i>(..document is missing %s)</i> " % (mess_no, fname),
+                    text="[%03d] <i>(..document is missing %s)</i> " % (mess_no, file_name),
                     parse_mode=ParseMode.HTML,
                 )
         else:
             context.bot.send_message(chat_id=bot.message.chat_id,
-                                     text="[%03d] (%s) %s" % (mess_no, "document", fname))
+                                     text="[%03d] (%s) %s" % (mess_no, "document", file_name))
 
     elif m1.startswith("/p#i#c"):
         m1 = m1[7:]
-        fname = m1.split(" ")[0].replace("\n", "")
-        m1 = m1[len(fname) + 1:]
+        file_name = m1.split(" ")[0].replace("\n", "")
+        m1 = m1[len(file_name) + 1:]
 
         if full:
 
             try:
-                fo = open(pic_path + fname, "rb")
-                context.bot.send_photo(chat_id=bot.message.chat_id, photo=fo, caption="[%03d] " % (mess_no) + m1)
+                fo = open(pic_path + file_name, "rb")
+                context.bot.send_photo(chat_id=bot.message.chat_id, photo=fo, caption="[%03d] " % mess_no + m1)
                 fo.close()
             except:
                 context.bot.send_message(
@@ -326,7 +309,7 @@ def send_message(bot, context: CallbackContext, mess_no, full=False):
             context.bot.send_message(chat_id=bot.message.chat_id, text="[%03d] (%s)" % (mess_no, "picture") + m1)
 
     else:
-        context.bot.send_message(chat_id=bot.message.chat_id, text="[%03d] " % (mess_no) + m1)
+        context.bot.send_message(chat_id=bot.message.chat_id, text="[%03d] " % mess_no + m1)
 
 
 def scan1dir4docs(p):
@@ -356,11 +339,11 @@ def all_docs(bot, context: CallbackContext, args):
         if m.startswith("/d#o#c"):
             m = m[7:]
             if m.startswith('"'):
-                fname = m[1:].split('"')[0]
+                file_name = m[1:].split('"')[0]
             else:
-                fname = m.split(" ")[0]
+                file_name = m.split(" ")[0]
 
-            s.add(fname.replace("\n", ""))
+            s.add(file_name.replace("\n", ""))
 
     for r in res:
         if not r in s:
@@ -386,7 +369,7 @@ def find_substring(bot, context: CallbackContext, args):
         return
     included = []
     excluded = []
-    mustbe = []
+    must_be = []
     anything = False
 
     if len(args) == 0:
@@ -401,12 +384,10 @@ def find_substring(bot, context: CallbackContext, args):
         s = s.replace("'", "")
         s = s.replace('"', "")
 
-        # s = unicodedata.normalize('NFKD', s).encode('cp1251', 'ignore')
-
         if s.startswith("!"):
             excluded.append(s[1:].lower())
         elif s.startswith("+"):
-            mustbe.append(s[1:].lower())
+            must_be.append(s[1:].lower())
         else:
             included.append(s.lower())
 
@@ -414,21 +395,21 @@ def find_substring(bot, context: CallbackContext, args):
     for m1 in messages:
         mess_no += 1
         m = m1.lower()
-        needbreak = False
+        need_break = False
         for e in excluded:
             if m.find(e) >= 0:
-                needbreak = True
+                need_break = True
                 break
-        if needbreak:
+        if need_break:
             continue
-        for o in mustbe:
+        for o in must_be:
             if m.find(o) < 0:
-                needbreak = True
+                need_break = True
                 break
-        if needbreak:
+        if need_break:
             continue
 
-        maybe = False  ##if len(mustbe)==0 else True
+        maybe = False  ##if len(must_be)==0 else True
         if not maybe:
             for o in included:
                 if m.find(o) >= 0:
@@ -453,7 +434,7 @@ def find_substring(bot, context: CallbackContext, args):
         )
 
 
-def refresh(bot, context: CallbackContext):
+def refresh(bot, context):
     print("Refreshing..")
     global messages, new_messages
     read_messages()
@@ -478,7 +459,7 @@ def del_message(bot, context: CallbackContext, args):
 
         return
 
-    todel = set()
+    to_del = set()
     for a in args:
         i = int(a) - 1
         if i >= len(messages):
@@ -489,25 +470,25 @@ def del_message(bot, context: CallbackContext, args):
         if m.startswith("/d#o#c"):
             m = m[7:]
             if m.startswith('"'):
-                fname = m[1:].split('"')[0].replace("\n", "")
+                file_name = m[1:].split('"')[0].replace("\n", "")
             else:
-                fname = m.split(" ")[0].replace("\n", "")
+                file_name = m.split(" ")[0].replace("\n", "")
 
             try:
-                os.unlink(doc_path + fname)
-                print("Deleted file ", doc_path + fname)
+                os.unlink(doc_path + file_name)
+                print("Deleted file ", doc_path + file_name)
             except:
 
-                print("Could not delete ", doc_path + fname)
+                print("Could not delete ", doc_path + file_name)
 
-        todel.add(i)
+        to_del.add(i)
 
-    todel = list(todel)
-    todel.sort()
-    todel.reverse()
+    to_del = list(to_del)
+    to_del.sort()
+    to_del.reverse()
 
     repl = ""
-    for td in todel:
+    for td in to_del:
         repl += "<i>(..message #%d deleted)</i>\n" % (td + 1)
         del messages[td]
 
@@ -551,12 +532,12 @@ def get_pic(bot, context: CallbackContext, args):
         )
         return
 
-    fname = pic_files[ndx]
-    capt = picdir.get(fname, fname)
+    file_name = pic_files[ndx]
+    capt = pic_dir.get(file_name, file_name)
     capt = "[pic %03d] " % (ndx + 1) + capt
 
     try:
-        fo = open(pic_path + fname, "rb")
+        fo = open(pic_path + file_name, "rb")
         context.bot.send_photo(chat_id=bot.message.chat_id, photo=fo, caption=capt)
     except:
         context.bot.send_message(
@@ -595,10 +576,10 @@ def del_pic(bot, context: CallbackContext, args):
         )
         return
 
-    fname = pic_files[ndx]
+    file_name = pic_files[ndx]
 
     try:
-        os.unlink(pic_path + fname)
+        os.unlink(pic_path + file_name)
         context.bot.send_message(
             chat_id=bot.message.chat_id,
             text="<i>(..picture #%d deleted)</i> " % (ndx + 1),
@@ -626,20 +607,20 @@ def find_tag(bot, context: CallbackContext, args):
     t = args[0]
     if not t.startswith("#"):
         t = "#" + t
-    l = all_tags[t]
-    if l is None:
+    l_tags = all_tags[t]
+    if l_tags is None:
         context.bot.send_message(chat_id=bot.message.chat_id, text="<i>(..tag is not found)</i> ",
                                  parse_mode=ParseMode.HTML)
         return
 
-    l = list(l)
+    l = list(l_tags)
     l.sort()
     for ndx in l[:10]:
         send_message(bot, context, ndx + 1, len(l) == 1)
 
 
 @send_action(ChatAction.TYPING)
-def tags_dir(bot, context: CallbackContext, args):
+def tags_dir(bot, context: CallbackContext, _):
     if not xis_user_ok(bot, context):
         return
 
@@ -654,7 +635,7 @@ def tags_dir(bot, context: CallbackContext, args):
 
 
 @send_action(ChatAction.TYPING)
-def delusettings(bot, context: CallbackContext, args):
+def del_u_settings(bot, context: CallbackContext, _):
     if not xis_user_ok(bot, context):
         return
     nm = "%s %s" % (bot.message.from_user.first_name, bot.message.from_user.last_name)
@@ -667,7 +648,7 @@ def delusettings(bot, context: CallbackContext, args):
 
 
 @send_action(ChatAction.TYPING)
-def showsettings(bot, context: CallbackContext, args):
+def show_settings(bot, context: CallbackContext, _):
     if not xis_user_ok(bot, context):
         return
 
@@ -693,7 +674,7 @@ def showsettings(bot, context: CallbackContext, args):
 
 
 @send_action(ChatAction.TYPING)
-def usettings(bot, context: CallbackContext, args):
+def u_settings(bot, context: CallbackContext, args):
     if not xis_user_ok(bot, context):
         return
 
@@ -721,7 +702,7 @@ def pics_dir(bot, context: CallbackContext, args):
     txt = ""
     i = ndx
     for pf in pic_files[ndx:ndx1]:
-        d = picdir.get(pf, "")
+        d = pic_dir.get(pf, "")
         i += 1
 
         txt += "[pic %03d] %s" % (i, pf)
@@ -792,10 +773,10 @@ def just_message(bot, context: CallbackContext):
             print(bot.message)
             return
 
-        newFile = context.bot.get_file(file_id)
+        new_file = context.bot.get_file(file_id)
 
         tst = time.localtime()
-        fname = pic_path + "%d-%02d-%02d_%02d%02d%02d" % (
+        file_name = pic_path + "%d-%02d-%02d_%02d%02d%02d" % (
             tst.tm_year,
             tst.tm_mon,
             tst.tm_mday,
@@ -803,20 +784,20 @@ def just_message(bot, context: CallbackContext):
             tst.tm_min,
             tst.tm_sec,
         )
-        if os.path.exists(fname + ".jpg"):
+        if os.path.exists(file_name + ".jpg"):
             ii = 0
             while True:
-                f1 = fname + "(%d)" % ii
+                f1 = file_name + "(%d)" % ii
                 if not os.path.exists(f1 + ".jpg"):
-                    fname = f1
+                    file_name = f1
                     break
                 ii += 1
 
-        newFile.download(fname + ".jpg")
+        new_file.download(file_name + ".jpg")
 
         if txt is not None:
-            m = "/p#i#c %s.jpg %s" % (os.path.basename(fname), txt)
-            picdir[os.path.basename(fname) + ".jpg"] = txt
+            m = "/p#i#c %s.jpg %s" % (os.path.basename(file_name), txt)
+            pic_dir[os.path.basename(file_name) + ".jpg"] = txt
             new_messages.append(m)
             update_messages()  ## debug
             save_messages()  ## debug
@@ -826,29 +807,29 @@ def just_message(bot, context: CallbackContext):
                 parse_mode=ParseMode.HTML,
             )
 
-        pic_files.append(os.path.basename(fname) + ".jpg")
+        pic_files.append(os.path.basename(file_name) + ".jpg")
     else:
         doc = bot.message["document"]
         if doc is not None:
-            fname = doc["file_name"]
-            if fname is not None:
+            file_name = doc["file_name"]
+            if file_name is not None:
                 file_id = doc["file_id"]
 
-                print("File ", file_id, fname)
-                newFile = context.bot.get_file(file_id)
+                print("File ", file_id, file_name)
+                new_file = context.bot.get_file(file_id)
 
                 nm = "%s %s" % (bot.message.from_user.first_name, bot.message.from_user.last_name)
                 upath = user_session_settings[nm].get("uploads", user_settings[nm].get("uploads", ""))
                 if not upath.endswith("/"):
                     upath += "/"
 
-                fname1 = doc_path + upath + fname
+                file_name1 = doc_path + upath + file_name
                 if not os.path.exists(doc_path + upath):
                     os.mkdir(doc_path + upath)
-                newFile.download(fname1)
-                print("Saving file", fname1)
+                new_file.download(file_name1)
+                print("Saving file", file_name1)
 
-                m = "/d#o#c %s" % upath + fname
+                m = "/d#o#c %s" % upath + file_name
                 new_messages.append(m)
                 update_messages()  ## debug
                 save_messages()  ## debug
@@ -860,29 +841,29 @@ def just_message(bot, context: CallbackContext):
 
 
 @send_action(ChatAction.TYPING)
-def techhelp(bot, context: CallbackContext, args):
+def tech_help(bot, context: CallbackContext, _):
     if not xis_user_ok(bot, context):
         return
 
-    cmdlist = []
+    cmd_list = []
 
     for k, i in updater.dispatcher.handlers.items():
         for j in i:
             try:
                 for z in j.command:
-                    cmdlist.append(z)
+                    cmd_list.append(z)
             except:
                 pass
 
     t = "<i>Available commands:\n</i>"
-    for c in cmdlist:
+    for c in cmd_list:
         t += "%s\n" % c
 
     context.bot.send_message(chat_id=bot.message.chat_id, text=t, parse_mode=ParseMode.HTML)
 
 
 @send_action(ChatAction.TYPING)
-def showhelp(bot, context: CallbackContext, args):
+def show_help(bot, context: CallbackContext, _):
     if not xis_user_ok(bot, context):
         return
     t = open(messages_path + "help.txt").read()
@@ -911,20 +892,18 @@ if __name__ == "__main__":
     if not os.path.exists(doc_path):
         os.mkdir(doc_path)
 
-    msgname = messages_path + "notes.txt"
-    if os.path.exists(msgname):
-        # os.unlink(msgname+".saved")
-        shutil.copyfile(msgname, msgname + ".saved")
+    m_name = messages_path + "notes.txt"
+    if os.path.exists(m_name):
+        shutil.copyfile(m_name, m_name + ".saved")
 
     read_messages()
-    cfg = read_config(messages_path + "config.json.sample")
-    read_users(cfg)
+    cfg = read_config(messages_path + "config.json")
+    read_users()
     build_pic_dir()
 
     updater.dispatcher.add_handler(CommandHandler("hello", hello))
     updater.dispatcher.add_handler(CommandHandler("start", hello))
     updater.dispatcher.add_handler(CommandHandler("find", find_substring, pass_args=True))
-    # updater.dispatcher.add_handler(CommandHandler('term', stop))
     updater.dispatcher.add_handler(CommandHandler("f", find_substring, pass_args=True))
 
     updater.dispatcher.add_handler(CommandHandler("re", refresh))
@@ -933,9 +912,9 @@ if __name__ == "__main__":
     updater.dispatcher.add_handler(CommandHandler("d", del_message, pass_args=True))
     updater.dispatcher.add_handler(CommandHandler("del", del_message, pass_args=True))
 
-    updater.dispatcher.add_handler(CommandHandler("set", usettings, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("restore", delusettings, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("settings", showsettings, pass_args=True))
+    updater.dispatcher.add_handler(CommandHandler("set", u_settings, pass_args=True))
+    updater.dispatcher.add_handler(CommandHandler("restore", del_u_settings, pass_args=True))
+    updater.dispatcher.add_handler(CommandHandler("settings", show_settings, pass_args=True))
 
     updater.dispatcher.add_handler(CommandHandler("docs", all_docs, pass_args=True))
     updater.dispatcher.add_handler(CommandHandler("pics", pics_dir, pass_args=True))
@@ -946,8 +925,8 @@ if __name__ == "__main__":
 
     updater.dispatcher.add_handler(CommandHandler("tag", find_tag, pass_args=True))
 
-    updater.dispatcher.add_handler(CommandHandler("help", showhelp, pass_args=True))
-    # updater.dispatcher.add_handler(CommandHandler("?", techhelp, pass_args=True))
+    updater.dispatcher.add_handler(CommandHandler("help", show_help, pass_args=True))
+    # updater.dispatcher.add_handler(CommandHandler("?", tech_help, pass_args=True))
 
     unknown_handler = MessageHandler(Filters.command, unknown_cmd)
     updater.dispatcher.add_handler(unknown_handler)
@@ -957,16 +936,3 @@ if __name__ == "__main__":
 
     updater.start_polling()
     updater.idle()
-
-"""
-{'delete_chat_photo': False, '
-_effective_attachment': {'file_name': u'LimeTradingApiOverview.pdf', 'file_id': 'BQADBAADuAcAAm4mEVDR2ypIOOlDaAI', 'mime_type': u'application/pdf', 'file_size': 414315}, 'new_chat_photo': [], 'from': {'first_name': u'Andy', 'last_name': u'Elkin', 'is_bot': False, 'id': 250300756, 'language_code': u'en'}, 'photo': [], 'channel_chat_created': False, 'caption_entities': [], 'entities': [], 'new_chat_members': [], 'supergroup_chat_created': False, 'chat': {'first_name': u'Andy', 'last_name': u'Elkin', 'type': u'private', 'id': 25030}, 'date': 1543662249, 'group_chat_created': False,
- 'document': {'file_name': u'LimeTradingApiOverview.pdf', 'file_id': 'BQADBAADuAcAAm4mEVDR2ypIOOlDaAI', 'mime_type': u'application/pdf', 'file_size': 414315}, 'message_id': 1409}
-
-
-
-
-{'delete_chat_photo': False, 'new_chat_photo': [], 'caption': u'jjj', 'from': {'first_name': u'Andy', 'last_name': u'Elkin', 'is_bot': False, 'id': 250300756, 'language_code': u'en'}, 
-'photo': [{'width': 90, 'file_size': 1314, 'file_id': 'AgADBAADurExG24mEVDTg87ylyDdablHoBoABLO-HBJl-CrnnEwFAAEC', 'height': 78}, {'width': 320, 'file_size': 17104, 'file_id': 'AgADBAADurExG24mEVDTg87ylyDdablHoBoABFLzbppvaDDgnUwFAAEC', 'height': 278}, {'width': 669, 'file_size': 44810, 'file_id': 'AgADBAADurExG24mEVDTg87ylyDdablHoBoABLZEFfOPFdrmnkwFAAEC', 'height': 582}], 'channel_chat_created': False, 'caption_entities': [], 'entities': [], 'new_chat_members': [], 'supergroup_chat_created': False, 'chat': {'first_name': u'Andy', 'last_name': u'Elkin', 'type': u'private', 'id': 25030}, 'date': 1543663348, 'group_chat_created': False, 'message_id': 1411}
-
-"""
