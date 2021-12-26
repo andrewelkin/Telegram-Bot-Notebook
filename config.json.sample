@@ -1,0 +1,17 @@
+{
+ "users": {
+    "John Doe": {
+      "id": 123303757,
+      "settings": "admin=1, uploads=JD_Uploads/"
+    },
+    "Jane Doe": {
+      "id": 145193358,
+      "settings": "admin=1"
+    },
+
+    "Jim Doe" : {
+      "id": 0,
+      "settings": "admin=0"
+    }
+  }
+}
