@@ -1,8 +1,8 @@
 import os, sys, shutil
-from telegram import ChatAction
+from telegram.constants import ChatAction
 import json
-from telegram.ext import Updater, CommandHandler, Filters, MessageHandler, CallbackContext
-from telegram import ParseMode
+from telegram.ext import Updater, CommandHandler, filters, MessageHandler, CallbackContext
+from telegram.constants import ParseMode
 from telegram import Update
 from functools import wraps
 import time
@@ -928,10 +928,10 @@ if __name__ == "__main__":
     updater.dispatcher.add_handler(CommandHandler("help", show_help, pass_args=True))
     # updater.dispatcher.add_handler(CommandHandler("?", tech_help, pass_args=True))
 
-    unknown_handler = MessageHandler(Filters.command, unknown_cmd)
+    unknown_handler = MessageHandler(filters.COMMAND, unknown_cmd)
     updater.dispatcher.add_handler(unknown_handler)
 
-    just_handler = MessageHandler(Filters.all, just_message)
+    just_handler = MessageHandler(filters.ALL, just_message)
     updater.dispatcher.add_handler(just_handler)
 
     updater.start_polling()
