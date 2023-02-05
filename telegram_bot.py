@@ -1,7 +1,6 @@
 import os, sys, shutil
-from telegram.constants import ChatAction
 import json
-from telegram.ext import Updater, CommandHandler, filters, MessageHandler, CallbackContext
+from telegram.ext import CommandHandler, filters, MessageHandler,  Application, ContextTypes
 from telegram.constants import ParseMode
 from telegram import Update
 from functools import wraps
@@ -118,7 +117,7 @@ def is_admin_ok(first, last, uid):
     return i == uid
 
 
-def xis_user_ok(update: Update, context: CallbackContext):
+def xis_user_ok(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_user_ok(update.message.chat.first_name, update.message.chat.last_name,
                       update.message.chat.id):
         context.bot.send_message(
@@ -132,7 +131,7 @@ def xis_user_ok(update: Update, context: CallbackContext):
     return True
 
 
-def xis_admin_ok(update: Update, context: CallbackContext):
+def xis_admin_ok(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_ok(update.message.chat.first_name, update.message.chat.last_name,
                        update.message.chat.id):
         context.bot.send_message(
@@ -245,22 +244,23 @@ def send_action(action):
     return decorator
 
 
-def hello(bot, context: CallbackContext):
-    bot.message.reply_text(
+async def hello(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await bot.message.reply_text(
         "Hello {}".format(bot.message.from_user.first_name)
         + ", I have %d notes" % (len(messages) + len(new_messages))
     )
 
-    del_u_settings(bot, context, [])
+    await del_u_settings(bot, context)
 
 
-def send_message(bot, context: CallbackContext, mess_no, full=False):
+async def send_message(bot, context: ContextTypes.DEFAULT_TYPE, mess_no, full=False):
     if len(messages) < mess_no:
-        context.bot.send_message(
+        await context.bot.send_message(
             chat_id=bot.message.chat_id,
-            text="<i>(..could not find message %03d)</i> " % mess_no,
+            text="<i>(..could not find message %03d, max number is %d)</i> " % (mess_no,len(messages)),
             parse_mode=ParseMode.HTML,
         )
+        return 
 
     m1 = messages[mess_no - 1]
     if m1.startswith("/d#o#c"):
@@ -274,16 +274,16 @@ def send_message(bot, context: CallbackContext, mess_no, full=False):
         if full:
             try:
                 fo = open(doc_path + file_name, "rb")
-                context.bot.send_document(chat_id=bot.message.chat_id, document=fo)
+                await context.bot.send_document(chat_id=bot.message.chat_id, document=fo)
                 fo.close()
             except:
-                context.bot.send_message(
+                await context.bot.send_message(
                     chat_id=bot.message.chat_id,
                     text="[%03d] <i>(..document is missing %s)</i> " % (mess_no, file_name),
                     parse_mode=ParseMode.HTML,
                 )
         else:
-            context.bot.send_message(chat_id=bot.message.chat_id,
+            await context.bot.send_message(chat_id=bot.message.chat_id,
                                      text="[%03d] (%s) %s" % (mess_no, "document", file_name))
 
     elif m1.startswith("/p#i#c"):
@@ -295,10 +295,10 @@ def send_message(bot, context: CallbackContext, mess_no, full=False):
 
             try:
                 fo = open(pic_path + file_name, "rb")
-                context.bot.send_photo(chat_id=bot.message.chat_id, photo=fo, caption="[%03d] " % mess_no + m1)
+                await context.bot.send_photo(chat_id=bot.message.chat_id, photo=fo, caption="[%03d] " % mess_no + m1)
                 fo.close()
             except:
-                context.bot.send_message(
+                await context.bot.send_message(
                     chat_id=bot.message.chat_id,
                     text="[%03d] <i>(..picture is missing %s)</i> " % (mess_no, m1),
                     parse_mode=ParseMode.HTML,
@@ -306,10 +306,10 @@ def send_message(bot, context: CallbackContext, mess_no, full=False):
 
         else:
 
-            context.bot.send_message(chat_id=bot.message.chat_id, text="[%03d] (%s)" % (mess_no, "picture") + m1)
+            await context.bot.send_message(chat_id=bot.message.chat_id, text="[%03d] (%s)" % (mess_no, "picture") + m1)
 
     else:
-        context.bot.send_message(chat_id=bot.message.chat_id, text="[%03d] " % mess_no + m1)
+        await context.bot.send_message(chat_id=bot.message.chat_id, text="[%03d] " % mess_no + m1)
 
 
 def scan1dir4docs(p):
@@ -331,8 +331,8 @@ def scan4docs(path):
     return res
 
 
-@send_action(ChatAction.TYPING)
-def all_docs(bot, context: CallbackContext, args):
+# @send_action(ChatAction.TYPING)
+async def all_docs(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     res = scan4docs(doc_path)
     s = set()
     for m in messages:
@@ -346,7 +346,7 @@ def all_docs(bot, context: CallbackContext, args):
             s.add(file_name.replace("\n", ""))
 
     for r in res:
-        if not r in s:
+        if r not in s:
             if r.find(" ") >= 0:
                 m = '/d#o#c "%s"' % r
             else:
@@ -357,29 +357,38 @@ def all_docs(bot, context: CallbackContext, args):
     update_messages()  ## debug
     save_messages()  ## debug
 
-    if len(args) == 0:
-        find_substring(bot, context, ["d#o#c"])
+    args = [s1 for s1 in bot.message.text.split() if len(s1) > 0]
+    if len(args) == 1:
+        args = ["/f","d#o#c"]
+        await actual_find_substring(bot, context, args)
     else:
-        find_substring(bot, context, ["+d#o#c"] + args)
+        args = ["/f","+d#o#c"] + bot.message.text.split()
+        await actual_find_substring(bot, context, args)
 
 
-@send_action(ChatAction.TYPING)
-def find_substring(bot, context: CallbackContext, args):
+# @send_action(ChatAction.TYPING)
+async def find_substring(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_user_ok(bot, context):
         return
+
+    args = [s1 for s1 in bot.message.text.split() if len(s1) > 0]
+    if len(args) <2:
+        await bot.message.reply_text(
+            "Please use syntax:  /f [+<must_be_sub_string1> ..] [!<must_not_be_sub_string1> ..] [<substring1> ..]  "
+        )
+        return
+    await actual_find_substring(bot,context, args)
+
+
+async def actual_find_substring(bot: Update, context: ContextTypes.DEFAULT_TYPE, args) -> None:
+
     included = []
     excluded = []
     must_be = []
     anything = False
 
-    if len(args) == 0:
-        bot.message.reply_text(
-            "Please use syntax:  /f [+<must_be_sub_string1> ..] [!<must_not_be_sub_string1> ..] [<substring1> ..]  "
-        )
-        return
-
     done = 0
-    for s in args:
+    for s in args[1:]:
 
         s = s.replace("'", "")
         s = s.replace('"', "")
@@ -418,7 +427,7 @@ def find_substring(bot, context: CallbackContext, args):
         if maybe:
             done += 1
             if done >= max_messages_in_search:
-                context.bot.send_message(
+                await context.bot.send_message(
                     chat_id=bot.message.chat_id,
                     text="<i>(.. there are more notes in search, please rectify.)</i>",
                     parse_mode=ParseMode.HTML,
@@ -426,15 +435,15 @@ def find_substring(bot, context: CallbackContext, args):
                 break
 
             anything = True
-            send_message(bot, context, mess_no)
+            await send_message(bot, context, mess_no)
 
     if not anything:
-        context.bot.send_message(
+        await context.bot.send_message(
             chat_id=bot.message.chat_id, text="<i>(.. there are no matches.)</i>", parse_mode=ParseMode.HTML
         )
 
 
-def refresh(bot, context):
+async def refresh(_: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print("Refreshing..")
     global messages, new_messages
     read_messages()
@@ -445,13 +454,14 @@ def refresh(bot, context):
 
 ## exit()
 
-@send_action(ChatAction.TYPING)
-def del_message(bot, context: CallbackContext, args):
+# @send_action(ChatAction.TYPING)
+async def del_message(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_admin_ok(bot, context):
         return
 
-    if len(args) < 1:
-        context.bot.send_message(
+    args = [s1 for s1 in bot.message.text.split() if len(s1) > 0]
+    if len(args) < 2:
+        await context.bot.send_message(
             chat_id=bot.message.chat_id,
             text="<i>(.. Please specify at least one message number.)</i>",
             parse_mode=ParseMode.HTML,
@@ -460,8 +470,8 @@ def del_message(bot, context: CallbackContext, args):
         return
 
     to_del = set()
-    for a in args:
-        i = int(a) - 1
+    for a1 in args[1:]:
+        i = int(a1) - 1
         if i >= len(messages):
             continue
         print("Deleting message no %d" % i)
@@ -493,39 +503,47 @@ def del_message(bot, context: CallbackContext, args):
         del messages[td]
 
     if repl != "":
-        context.bot.send_message(chat_id=bot.message.chat_id, text=repl, parse_mode=ParseMode.HTML)
+        await context.bot.send_message(chat_id=bot.message.chat_id, text=repl, parse_mode=ParseMode.HTML)
 
     save_messages()  ## debug
     rebuild_tags()
     build_pic_dir()
 
 
-def unknown_cmd(bot, context: CallbackContext):
-    txt = bot.message["text"]
+async def unknown_cmd(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    txt = bot.message.text
     if txt is not None and len(txt) > 1:
         txt = txt[1:]
         if txt[0] == "#":
-            txt = txt[1:]
-            return find_tag(bot, context, [txt])
+            await find_tag(bot, context)
+            return
 
         if txt.isdigit():
             num = int(txt)
-            send_message(bot, context, num, True)
+            await send_message(bot, context, num, True)
             return
 
-    context.bot.send_message(chat_id=bot.message.chat_id, text="Sorry, I didn't understand that command:  " + txt)
+    await context.bot.send_message(chat_id=bot.message.chat_id, text="Sorry, I didn't understand that command:  " + txt)
 
 
-@send_action(ChatAction.TYPING)
-def get_pic(bot, context: CallbackContext, args):
+# @send_action(ChatAction.TYPING)
+async def get_pic(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_user_ok(bot, context):
         return
     ndx = 0
-    if len(args) > 0:
-        ndx = int(args[0]) - 1
+    args = [s1 for s1 in bot.message.text.split() if len(s1) > 0]
+    if len(args) > 1:
+        ndx = int(args[1]) - 1
+    else:
+        await context.bot.send_message(
+            chat_id=bot.message.chat_id,
+            text="<i>(..please define picture number)</i> ",
+            parse_mode=ParseMode.HTML,
+        )
+        return
 
-    if ndx >= len(pic_files):
-        context.bot.send_message(
+    if ndx <0 or ndx >= len(pic_files):
+        await context.bot.send_message(
             chat_id=bot.message.chat_id,
             text="<i>(.. Photo #%d not found.)</i>" % (ndx + 1),
             parse_mode=ParseMode.HTML,
@@ -538,30 +556,30 @@ def get_pic(bot, context: CallbackContext, args):
 
     try:
         fo = open(pic_path + file_name, "rb")
-        context.bot.send_photo(chat_id=bot.message.chat_id, photo=fo, caption=capt)
+        await context.bot.send_photo(chat_id=bot.message.chat_id, photo=fo, caption=capt)
     except:
-        context.bot.send_message(
+        await context.bot.send_message(
             chat_id=bot.message.chat_id,
             text="<i>(..picture #%d is missing)</i> " % (ndx + 1),
             parse_mode=ParseMode.HTML,
         )
 
 
-def del_pic(bot, context: CallbackContext, args):
+async def del_pic(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_admin_ok(bot, context):
         return
-    if len(args) < 1:
-        context.bot.send_message(
+    args = [s1 for s1 in bot.message.text.split() if len(s1) > 0]
+    if len(args) < 2:
+        await context.bot.send_message(
             chat_id=bot.message.chat_id,
             text="<i>(.. Please specify at least one picture number.)</i>",
             parse_mode=ParseMode.HTML,
         )
-
         return
 
-    ndx = int(args[0]) - 1
+    ndx = int(args[1]) - 1
     if ndx >= len(pic_files):
-        context.bot.send_message(
+        await context.bot.send_message(
             chat_id=bot.message.chat_id,
             text="<i>(.. Photo #%d not found.)</i>" % (ndx + 1),
             parse_mode=ParseMode.HTML,
@@ -569,7 +587,7 @@ def del_pic(bot, context: CallbackContext, args):
         return
 
     if pic_files[ndx] == "(..deleted)":
-        context.bot.send_message(
+        await context.bot.send_message(
             chat_id=bot.message.chat_id,
             text="<i>(..picture #%d is already deleted)</i> " % (ndx + 1),
             parse_mode=ParseMode.HTML,
@@ -580,47 +598,54 @@ def del_pic(bot, context: CallbackContext, args):
 
     try:
         os.unlink(pic_path + file_name)
-        context.bot.send_message(
+        await context.bot.send_message(
             chat_id=bot.message.chat_id,
             text="<i>(..picture #%d deleted)</i> " % (ndx + 1),
             parse_mode=ParseMode.HTML,
         )
         pic_files[ndx] = "(..deleted)"
     except:
-        context.bot.send_message(
+        await context.bot.send_message(
             chat_id=bot.message.chat_id,
             text="<i>(..picture #%d is missing)</i> " % (ndx + 1),
             parse_mode=ParseMode.HTML,
         )
 
 
-@send_action(ChatAction.TYPING)
-def find_tag(bot, context: CallbackContext, args):
+# @send_action(ChatAction.TYPING)
+async def find_tag(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_user_ok(bot, context):
         return
-    if len(args) < 1:
-        context.bot.send_message(
+    args = [s1 for s1 in bot.message.text.split() if len(s1) > 0]
+    if len(args) == 1 and len(args[0]) >1 and (args[0][0] == '#' or args[0].startswith('/#')) :
+        tg = args[0][1:]
+        if tg[0] == '#':
+            tg = tg[1:]
+        args =["/tag", tg]
+
+    if len(args) < 2:
+        await context.bot.send_message(
             chat_id=bot.message.chat_id, text="<i>(.. Please specify tag.)</i>", parse_mode=ParseMode.HTML
         )
         return
 
-    t = args[0]
+    t = args[1]
     if not t.startswith("#"):
         t = "#" + t
     l_tags = all_tags[t]
     if l_tags is None:
-        context.bot.send_message(chat_id=bot.message.chat_id, text="<i>(..tag is not found)</i> ",
+        await context.bot.send_message(chat_id=bot.message.chat_id, text="<i>(..tag is not found)</i> ",
                                  parse_mode=ParseMode.HTML)
         return
 
-    l = list(l_tags)
-    l.sort()
-    for ndx in l[:10]:
-        send_message(bot, context, ndx + 1, len(l) == 1)
+    ll = list(l_tags)
+    ll.sort()
+    for ndx in ll[:10]:
+        await send_message(bot, context, ndx + 1, len(ll) == 1)
 
 
-@send_action(ChatAction.TYPING)
-def tags_dir(bot, context: CallbackContext, _):
+# @send_action(ChatAction.TYPING)
+async def tags_dir(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_user_ok(bot, context):
         return
 
@@ -631,24 +656,25 @@ def tags_dir(bot, context: CallbackContext, _):
 
     if len(rep) > 0:
         rep = rep[: len(rep) - 1]
-    context.bot.send_message(chat_id=bot.message.chat_id, text=rep, parse_mode=ParseMode.HTML)
+
+    await context.bot.send_message(chat_id=bot.message.chat_id, text=rep, parse_mode=ParseMode.HTML)
 
 
-@send_action(ChatAction.TYPING)
-def del_u_settings(bot, context: CallbackContext, _):
+# @send_action(ChatAction.TYPING)
+async def del_u_settings(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_user_ok(bot, context):
         return
     nm = "%s %s" % (bot.message.from_user.first_name, bot.message.from_user.last_name)
     user_session_settings[nm] = {}
-    context.bot.send_message(
+    await context.bot.send_message(
         chat_id=bot.message.chat_id,
         text="<i>(.. session level user settings deleted.)</i>",
         parse_mode=ParseMode.HTML,
     )
 
 
-@send_action(ChatAction.TYPING)
-def show_settings(bot, context: CallbackContext, _):
+# @send_action(ChatAction.TYPING)
+async def show_settings(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_user_ok(bot, context):
         return
 
@@ -670,16 +696,17 @@ def show_settings(bot, context: CallbackContext, _):
         for k in ss.items():
             m += "%s=%s\n" % k
 
-    context.bot.send_message(chat_id=bot.message.chat_id, text=m, parse_mode=ParseMode.HTML)
+    await context.bot.send_message(chat_id=bot.message.chat_id, text=m, parse_mode=ParseMode.HTML)
 
 
-@send_action(ChatAction.TYPING)
-def u_settings(bot, context: CallbackContext, args):
+# @send_action(ChatAction.TYPING)
+async def u_settings(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_user_ok(bot, context):
         return
 
     nm = "%s %s" % (bot.message.from_user.first_name, bot.message.from_user.last_name)
     settings = user_session_settings.get(nm, dict())
+    args = [s1 for s1 in bot.message.text.split() if len(s1) > 0]
     for i in args:
         j = i.split("=")
         if len(j) == 2:
@@ -689,13 +716,22 @@ def u_settings(bot, context: CallbackContext, args):
     user_session_settings[nm] = settings
 
 
-@send_action(ChatAction.TYPING)
-def pics_dir(bot, context: CallbackContext, args):
+# @send_action(ChatAction.TYPING)
+async def pics_dir(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_user_ok(bot, context):
         return
     ndx = 0
-    if len(args) > 0:
-        ndx = int(args[0]) - 1
+    args = [s1 for s1 in bot.message.text.split() if len(s1) > 0]
+
+    if len(args) > 1:
+        ndx = int(args[1]) - 1
+    else:
+        await context.bot.send_message(
+            chat_id=bot.message.chat_id,
+            text="<i>(.. Please specify at least one picture number.)</i>",
+            parse_mode=ParseMode.HTML,
+        )
+        return
 
     ndx1 = min(ndx + 20, len(pic_files))
 
@@ -716,37 +752,46 @@ def pics_dir(bot, context: CallbackContext, args):
             txt += "\n"
 
     if len(txt) == 0:
-        context.bot.send_message(
+        await context.bot.send_message(
             chat_id=bot.message.chat_id, text="<i>(.. No pictures found.)</i>", parse_mode=ParseMode.HTML
         )
     else:
 
         tx1 = "<i>(.. pictures %d..%d of %d )</i>\n" % (ndx + 1, ndx1, len(pic_files))
-        context.bot.send_message(chat_id=bot.message.chat_id, text=tx1 + txt, parse_mode=ParseMode.HTML)
+        await context.bot.send_message(chat_id=bot.message.chat_id, text=tx1 + txt, parse_mode=ParseMode.HTML)
 
 
-def just_message(bot, context: CallbackContext):
-    txt = bot.message["text"]
+async def just_message(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    txt = bot.message.text
     if txt is not None:
         if txt.startswith("#"):
-            args = txt.split(" ")
+            args = [s1 for s1 in txt.split() if len(s1) > 0]
+
             if len(args) == 1:
-                return find_tag(bot, context, args)
+                await find_tag(bot, context)
+                return
 
         if txt.lower().startswith("find "):
-            return find_substring(bot, context, txt[5:].split(" "))
-        if txt.lower().startswith("pic "):
-            return get_pic(bot, context, [s for s in txt[4:].split(" ") if len(s) > 0])
-        if txt.lower().startswith("docs"):
-            return all_docs(bot, context, [s for s in txt[4:].split(" ") if len(s) > 0])
-        if txt.lower().startswith("pics"):
-            return pics_dir(bot, context, [s for s in txt[4:].split(" ") if len(s) > 0])
-        if txt.lower().startswith("tags"):
-            return tags_dir(bot, context, txt[5:].split(" "))
-        if txt.lower().startswith("tag "):
-            return find_tag(bot, context, txt[4:].split(" "))
-        if txt.lower().startswith("del "):
-            return del_message(bot, context, [s for s in txt[4:].split(" ") if len(s) > 0])
+            await find_substring(bot, context)
+            return
+        elif txt.lower().startswith("pic "):
+            await get_pic(bot, context)
+            return
+        elif txt.lower().startswith("docs"):
+            await all_docs(bot, context)
+            return
+        elif txt.lower().startswith("pics"):
+            await pics_dir(bot, context)
+            return
+        elif txt.lower().startswith("tags"):
+            await tags_dir(bot, context)
+            return
+        elif txt.lower().startswith("tag "):
+            await find_tag(bot, context)
+            return
+        elif txt.lower().startswith("del "):
+            await del_message(bot, context)
+            return
 
     if not xis_admin_ok(bot, context):
         return
@@ -756,7 +801,7 @@ def just_message(bot, context: CallbackContext):
         new_messages.append(txt)
         update_messages()  ## debug
         save_messages()  ## debug
-        context.bot.send_message(
+        await context.bot.send_message(
             chat_id=bot.message.chat_id,
             text="<i>(.. message saved as [%03d].)</i>" % len(messages),
             parse_mode=ParseMode.HTML,
@@ -764,16 +809,16 @@ def just_message(bot, context: CallbackContext):
 
         return
 
-    ph = bot.message["photo"]
+    ph = bot.message.photo
     if ph is not None and len(ph) > 0:
-        txt = bot.message["caption"]
+        txt = bot.message.caption
 
         file_id = ph[-1]["file_id"]
         if file_id is None:
             print(bot.message)
             return
 
-        new_file = context.bot.get_file(file_id)
+        new_file = await context.bot.get_file(file_id)
 
         tst = time.localtime()
         file_name = pic_path + "%d-%02d-%02d_%02d%02d%02d" % (
@@ -793,7 +838,7 @@ def just_message(bot, context: CallbackContext):
                     break
                 ii += 1
 
-        new_file.download(file_name + ".jpg")
+        await new_file.download_to_drive(file_name + ".jpg")
 
         if txt is not None:
             m = "/p#i#c %s.jpg %s" % (os.path.basename(file_name), txt)
@@ -801,7 +846,7 @@ def just_message(bot, context: CallbackContext):
             new_messages.append(m)
             update_messages()  ## debug
             save_messages()  ## debug
-            context.bot.send_message(
+            await context.bot.send_message(
                 chat_id=bot.message.chat_id,
                 text="<i>(.. message saved as [%03d].)</i>" % len(messages),
                 parse_mode=ParseMode.HTML,
@@ -809,11 +854,11 @@ def just_message(bot, context: CallbackContext):
 
         pic_files.append(os.path.basename(file_name) + ".jpg")
     else:
-        doc = bot.message["document"]
+        doc = bot.message.document
         if doc is not None:
-            file_name = doc["file_name"]
+            file_name = doc.file_name
             if file_name is not None:
-                file_id = doc["file_id"]
+                file_id = doc.file_id
 
                 print("File ", file_id, file_name)
                 new_file = context.bot.get_file(file_id)
@@ -833,21 +878,21 @@ def just_message(bot, context: CallbackContext):
                 new_messages.append(m)
                 update_messages()  ## debug
                 save_messages()  ## debug
-                context.bot.send_message(
+                await context.bot.send_message(
                     chat_id=bot.message.chat_id,
                     text="<i>(.. message saved as [%03d].)</i>" % len(messages),
                     parse_mode=ParseMode.HTML,
                 )
 
 
-@send_action(ChatAction.TYPING)
-def tech_help(bot, context: CallbackContext, _):
+# @send_action(ChatAction.TYPING)
+async def tech_help(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_user_ok(bot, context):
         return
 
     cmd_list = []
 
-    for k, i in updater.dispatcher.handlers.items():
+    for k, i in updater.handlers.items():
         for j in i:
             try:
                 for z in j.command:
@@ -859,15 +904,15 @@ def tech_help(bot, context: CallbackContext, _):
     for c in cmd_list:
         t += "%s\n" % c
 
-    context.bot.send_message(chat_id=bot.message.chat_id, text=t, parse_mode=ParseMode.HTML)
+    await context.bot.send_message(chat_id=bot.message.chat_id, text=t, parse_mode=ParseMode.HTML)
 
 
-@send_action(ChatAction.TYPING)
-def show_help(bot, context: CallbackContext, _):
+# @send_action(ChatAction.TYPING)
+async def show_help(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not xis_user_ok(bot, context):
         return
     t = open(messages_path + "help.txt").read()
-    context.bot.send_message(chat_id=bot.message.chat_id, text=t)
+    await context.bot.send_message(chat_id=bot.message.chat_id, text=t)
 
 
 if __name__ == "__main__":
@@ -883,7 +928,8 @@ if __name__ == "__main__":
     secret = open(messages_path + "secret.txt").read()
     secret = secret.replace("\n", "")
 
-    updater = Updater(secret)
+    updater = Application.builder().token(secret).build()
+    # updater = Updater(secret)
 
     if not os.path.exists(messages_path):
         os.mkdir(messages_path)
@@ -901,38 +947,38 @@ if __name__ == "__main__":
     read_users()
     build_pic_dir()
 
-    updater.dispatcher.add_handler(CommandHandler("hello", hello))
-    updater.dispatcher.add_handler(CommandHandler("start", hello))
-    updater.dispatcher.add_handler(CommandHandler("find", find_substring, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("f", find_substring, pass_args=True))
+    updater.add_handler(CommandHandler("hello", hello))
+    updater.add_handler(CommandHandler("start", hello))
+    updater.add_handler(CommandHandler("find", find_substring))
+    updater.add_handler(CommandHandler("f", find_substring))
 
-    updater.dispatcher.add_handler(CommandHandler("re", refresh))
-    updater.dispatcher.add_handler(CommandHandler("refresh", refresh))
+    updater.add_handler(CommandHandler("re", refresh))
+    updater.add_handler(CommandHandler("refresh", refresh))
 
-    updater.dispatcher.add_handler(CommandHandler("d", del_message, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("del", del_message, pass_args=True))
+    updater.add_handler(CommandHandler("d", del_message))
+    updater.add_handler(CommandHandler("del", del_message))
 
-    updater.dispatcher.add_handler(CommandHandler("set", u_settings, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("restore", del_u_settings, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("settings", show_settings, pass_args=True))
+    updater.add_handler(CommandHandler("set", u_settings))
+    updater.add_handler(CommandHandler("restore", del_u_settings))
+    updater.add_handler(CommandHandler("settings", show_settings))
 
-    updater.dispatcher.add_handler(CommandHandler("docs", all_docs, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("pics", pics_dir, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("pic", get_pic, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("delpic", del_pic, pass_args=True))
+    updater.add_handler(CommandHandler("docs", all_docs))
+    updater.add_handler(CommandHandler("pics", pics_dir))
+    updater.add_handler(CommandHandler("pic", get_pic))
+    updater.add_handler(CommandHandler("delpic", del_pic))
 
-    updater.dispatcher.add_handler(CommandHandler("tags", tags_dir, pass_args=True))
+    updater.add_handler(CommandHandler("tags", tags_dir))
 
-    updater.dispatcher.add_handler(CommandHandler("tag", find_tag, pass_args=True))
+    updater.add_handler(CommandHandler("tag", find_tag))
 
-    updater.dispatcher.add_handler(CommandHandler("help", show_help, pass_args=True))
-    # updater.dispatcher.add_handler(CommandHandler("?", tech_help, pass_args=True))
+    updater.add_handler(CommandHandler("help", show_help))
+    # updater.add_handler(CommandHandler("?", tech_help))
 
     unknown_handler = MessageHandler(filters.COMMAND, unknown_cmd)
-    updater.dispatcher.add_handler(unknown_handler)
+    updater.add_handler(unknown_handler)
 
     just_handler = MessageHandler(filters.ALL, just_message)
-    updater.dispatcher.add_handler(just_handler)
+    updater.add_handler(just_handler)
 
-    updater.start_polling()
-    updater.idle()
+    updater.run_polling()
+
