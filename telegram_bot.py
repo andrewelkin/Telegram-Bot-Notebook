@@ -768,8 +768,6 @@ async def pics_dir(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def just_message(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     txt = bot.message.text
     if txt is not None:
-        if txt.startswith("/"):
-            txt = txt[1:]
 
         if txt.startswith("#"):
             args = [s1 for s1 in txt.split() if len(s1) > 0]
@@ -777,10 +775,6 @@ async def just_message(bot: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if len(args) == 1:
                 await find_tag(bot, context)
                 return
-        else:
-            await find_substring(bot, context)
-            return
-
 
         if txt.lower().startswith("find "):
             await find_substring(bot, context)
